@@ -6,5 +6,5 @@ import com.example.payment.entity.PaymentTransaction;
 public interface PaymentGatewayClient {
     ProviderChargeResult charge(CreatePaymentRequest request);
     ProviderRefundResult refund(PaymentTransaction payment, String reason);
-    boolean isValidWebhookSignature(String signature);
+    boolean isValidWebhookSignature(String signature, String rawBody);
 }

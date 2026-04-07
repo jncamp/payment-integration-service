@@ -1,8 +1,10 @@
 package com.example.payment.dto;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.constraints.NotBlank;
 
 public class WebhookEventRequest {
+
     @NotBlank(message = "providerPaymentId is required")
     private String providerPaymentId;
 
@@ -23,5 +25,14 @@ public class WebhookEventRequest {
 
     public void setEventType(String eventType) {
         this.eventType = eventType;
+    }
+
+    public static WebhookEventRequest fromJson(String rawBody) {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            return mapper.readValue(rawBody, WebhookEventRequest.class);
+        } catch (Exception e) {
+            throw new RuntimeException("Invalid webhook payload", e);
+        }
     }
 }

@@ -23,13 +23,14 @@ public class WebhookController {
     @PostMapping
     public ResponseEntity<Map<String, String>> handleWebhook(
             @RequestHeader(value = "X-Webhook-Signature", required = false) String signature,
-            @Valid @RequestBody WebhookEventRequest request) {
+            @RequestBody String rawBody) {
 
-        if (signature == null || !paymentService.hasValidWebhookSignature(signature)) {
+        if (signature == null || !paymentService.hasValidWebhookSignature(signature, rawBody)) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid webhook signature");
         }
 
+        WebhookEventRequest request = WebhookEventRequest.fromJson(rawBody);
+
         paymentService.processWebhook(request.getProviderPaymentId(), request.getEventType());
         return ResponseEntity.ok(Map.of("message", "Webhook processed"));
-    }
-}
+    }}

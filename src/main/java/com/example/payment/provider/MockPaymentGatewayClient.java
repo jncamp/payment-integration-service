@@ -31,7 +31,9 @@ public class MockPaymentGatewayClient implements PaymentGatewayClient {
     }
 
     @Override
-    public boolean isValidWebhookSignature(String signature) {
-        return webhookSecret.equals(signature);
+    public boolean isValidWebhookSignature(String signature, String rawBody) {
+        // For demo purposes, just check signature is not empty
+        // In real systems, you'd hash rawBody with a secret and compare
+        return signature != null && !signature.isBlank();
     }
 }

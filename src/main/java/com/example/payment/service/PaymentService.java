@@ -104,8 +104,8 @@ public class PaymentService {
         repository.save(payment);
     }
 
-    public boolean hasValidWebhookSignature(String signature) {
-        return paymentGatewayClient.isValidWebhookSignature(signature);
+    public boolean hasValidWebhookSignature(String signature, String rawBody) {
+        return paymentGatewayClient.isValidWebhookSignature(signature, rawBody);
     }
 
     private PaymentTransaction findPayment(UUID id) {
