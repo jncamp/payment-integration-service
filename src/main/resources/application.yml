@@ -1,6 +1,8 @@
 server:
   port: ${PORT:8081}
-
+app:
+  security:
+    api-key: ${APP_API_KEY:change-me-dev-key}
 spring:
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/payment_demo}

@@ -37,7 +37,7 @@ public class PaymentService {
                     repository.findByIdempotencyKey(request.getIdempotencyKey());
 
             if (existing.isPresent()) {
-                return PaymentResponse.from(existing.get());
+                return PaymentResponse.fromReplay(existing.get());
             }
         }
 

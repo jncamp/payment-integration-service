@@ -9,6 +9,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public class PaymentResponse {
+
     private UUID id;
     private BigDecimal amount;
     private String currency;
@@ -21,6 +22,9 @@ public class PaymentResponse {
     private String failureReason;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
+
+    // ✅ NEW FIELD
+    private boolean idempotentReplay;
 
     public static PaymentResponse from(PaymentTransaction payment) {
         PaymentResponse response = new PaymentResponse();
@@ -36,31 +40,55 @@ public class PaymentResponse {
         response.setFailureReason(payment.getFailureReason());
         response.setCreatedAt(payment.getCreatedAt());
         response.setUpdatedAt(payment.getUpdatedAt());
+        response.setIdempotentReplay(false); // default
         return response;
     }
 
+    // ✅ helper for replay case
+    public static PaymentResponse fromReplay(PaymentTransaction payment) {
+        PaymentResponse response = from(payment);
+        response.setIdempotentReplay(true);
+        return response;
+    }
+
+    // getters/setters
+
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
+
     public BigDecimal getAmount() { return amount; }
     public void setAmount(BigDecimal amount) { this.amount = amount; }
+
     public String getCurrency() { return currency; }
     public void setCurrency(String currency) { this.currency = currency; }
+
     public String getCustomerEmail() { return customerEmail; }
     public void setCustomerEmail(String customerEmail) { this.customerEmail = customerEmail; }
+
     public String getCustomerName() { return customerName; }
     public void setCustomerName(String customerName) { this.customerName = customerName; }
+
     public PaymentStatus getStatus() { return status; }
     public void setStatus(PaymentStatus status) { this.status = status; }
+
     public PaymentProvider getProvider() { return provider; }
     public void setProvider(PaymentProvider provider) { this.provider = provider; }
+
     public String getProviderPaymentId() { return providerPaymentId; }
     public void setProviderPaymentId(String providerPaymentId) { this.providerPaymentId = providerPaymentId; }
+
     public String getProviderRefundId() { return providerRefundId; }
     public void setProviderRefundId(String providerRefundId) { this.providerRefundId = providerRefundId; }
+
     public String getFailureReason() { return failureReason; }
     public void setFailureReason(String failureReason) { this.failureReason = failureReason; }
+
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
+
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(OffsetDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public boolean isIdempotentReplay() { return idempotentReplay; }
+    public void setIdempotentReplay(boolean idempotentReplay) { this.idempotentReplay = idempotentReplay; }
 }

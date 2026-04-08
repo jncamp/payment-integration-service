@@ -27,8 +27,14 @@ public class PaymentController {
             @Valid @RequestBody CreatePaymentRequest request
     ) {
         request.setIdempotencyKey(idempotencyKey);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(paymentService.createPayment(request));
+
+        PaymentResponse response = paymentService.createPayment(request);
+
+        if (response.isIdempotentReplay()) {
+            return ResponseEntity.ok(response);
+        }
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/{id}")
