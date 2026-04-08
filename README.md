@@ -1,149 +1,238 @@
-# Payment Integration Service
+# Payment Integration Service (Production-Grade Demo)
 
-Railway-ready Java Spring Boot demo showing a payment integration workflow with validation, persistence, refund handling, webhook processing, and clean error responses.
+A production-style payment backend built with **Java 17 + Spring Boot**, demonstrating real-world patterns used in payment systems such as Stripe and PayPal.
 
-## What this project demonstrates
+This project showcases **idempotent payment processing, webhook handling, API security, and clean architecture** — designed to be used as a portfolio piece for backend/API integration work.
 
-- Java 17 + Spring Boot backend design
-- PostgreSQL persistence with Flyway migrations
-- Payment creation endpoint
-- Refund endpoint
-- Webhook endpoint with simple signature verification
-- Clean validation and error handling
-- Docker-ready deployment for Railway
+---
 
-## Important note
+## 🚀 Features
 
-This starter uses a **mock payment gateway client** so you can run and demonstrate the workflow without live gateway credentials. The code is structured so you can later swap in Stripe or another provider by replacing `MockPaymentGatewayClient` with a real implementation.
+### Core Payment Functionality
 
-## API Endpoints
+* Create payment
+* Refund payment
+* Retrieve payment by ID
 
-### Create payment
+### Production-Grade Capabilities
 
-`POST /api/payments/create`
+* **Idempotency (Header-based)**
+  Prevents duplicate charges using `Idempotency-Key` header
+* **Correct HTTP Semantics**
 
-Example body:
+    * `201 Created` for new payments
+    * `200 OK` for idempotent replays
+* **Webhook Processing**
+  Handles async payment provider events
+* **Webhook Signature Validation Pattern**
+  Validates requests using raw payload + signature header
+* **API Key Security**
+  Protects endpoints using `X-API-Key` header
+* **Database Migrations (Flyway)**
+  Version-controlled schema changes
+* **Clean Architecture**
 
-```json
-{
-  "amount": 49.99,
-  "currency": "USD",
-  "customerEmail": "john@example.com",
-  "customerName": "John Camp"
-}
+    * Controller → Service → Repository → Provider
+
+---
+
+## 🏗️ Tech Stack
+
+* Java 17
+* Spring Boot 3
+* Spring Data JPA (Hibernate)
+* PostgreSQL
+* Flyway
+* Maven
+
+---
+
+## 🔐 Security
+
+### API Key Protection
+
+All endpoints (except webhooks) require:
+
+```
+X-API-Key: change-me-dev-key
 ```
 
-### Get payment
+Configured via:
 
-`GET /api/payments/{id}`
-
-### Refund payment
-
-`POST /api/payments/{id}/refund`
-
-Example body:
-
-```json
-{
-  "reason": "Customer requested refund"
-}
+```yaml
+app:
+  security:
+    api-key: ${APP_API_KEY:change-me-dev-key}
 ```
 
-### Webhook
+---
 
-`POST /api/webhooks/payment-provider`
+## 🔁 Idempotency
 
-Required header:
+Use header:
 
-`X-Webhook-Signature: demo-secret`
-
-Example body:
-
-```json
-{
-  "providerPaymentId": "mock_pay_xxx",
-  "eventType": "payment.refunded"
-}
+```
+Idempotency-Key: your-unique-key
 ```
 
-## Local development
+### Behavior:
 
-### 1. Start Postgres
+* First request → creates payment (`201`)
+* Second request (same key) → returns existing payment (`200`)
+* No duplicate charges
 
-Example Docker command:
+---
+
+## 📡 API Endpoints
+
+### Create Payment
 
 ```bash
-docker run --name payment_demo_db \
-  -e POSTGRES_DB=payment_demo \
-  -e POSTGRES_USER=ecommerce \
-  -e POSTGRES_PASSWORD=ecommerce \
-  -p 5432:5432 \
-  -d postgres:16
+curl -i -X POST http://localhost:8081/api/payments/create \
+-H "Content-Type: application/json" \
+-H "X-API-Key: change-me-dev-key" \
+-H "Idempotency-Key: test-key-1" \
+-d '{
+  "amount": 1700,
+  "currency": "USD",
+  "customerEmail": "user@example.com",
+  "customerName": "John Doe",
+  "description": "Test payment"
+}'
 ```
 
-### 2. Run the app
+---
+
+### Get Payment
+
+```bash
+curl http://localhost:8081/api/payments/{id}
+```
+
+---
+
+### Refund Payment
+
+```bash
+curl -X POST http://localhost:8081/api/payments/{id}/refund \
+-H "Content-Type: application/json" \
+-H "X-API-Key: change-me-dev-key" \
+-d '{
+  "reason": "Customer request"
+}'
+```
+
+---
+
+### Webhook Endpoint
+
+```bash
+curl -X POST http://localhost:8081/api/webhooks/payment-provider \
+-H "Content-Type: application/json" \
+-H "X-Webhook-Signature: testsig" \
+-d '{
+  "providerPaymentId": "mock_pay_123",
+  "eventType": "payment.refunded"
+}'
+```
+
+Webhook endpoint is intentionally **not protected by API key**, but instead uses signature validation.
+
+---
+
+## 🔄 Webhook Events Supported
+
+* `payment.succeeded`
+* `payment.failed`
+* `payment.refunded`
+
+---
+
+## 🧠 Design Highlights
+
+### Idempotency
+
+Ensures safe retries and prevents duplicate charges — a critical requirement in payment systems.
+
+### Separation of Concerns
+
+* Controllers handle HTTP
+* Services handle business logic
+* Providers simulate external payment gateways
+
+### Extensibility
+
+Mock provider can be replaced with:
+
+* Stripe
+* PayPal
+* Square
+
+---
+
+## ⚙️ Running Locally
+
+### Prerequisites
+
+* Java 17
+* PostgreSQL running locally
+
+### Start application
 
 ```bash
 ./mvnw spring-boot:run
 ```
 
-or if Maven is installed:
+---
 
-```bash
-mvn spring-boot:run
-```
+## 📦 Database
 
-### 3. Test with curl
+* PostgreSQL
+* Managed via Flyway migrations
+* Schema auto-versioned
 
-Create payment:
+---
 
-```bash
-curl -i -X POST http://localhost:8080/api/payments/create \
--H "Content-Type: application/json" \
--d '{
-  "amount":49.99,
-  "currency":"USD",
-  "customerEmail":"john@example.com",
-  "customerName":"John Camp"
-}'
-```
+## 🌐 Deployment (Railway Ready)
 
-Refund payment:
+This project is designed for easy deployment on Railway:
 
-```bash
-curl -i -X POST http://localhost:8080/api/payments/{id}/refund \
--H "Content-Type: application/json" \
--d '{
-  "reason":"Customer requested refund"
-}'
-```
+1. Push to GitHub
+2. Create Railway project
+3. Add PostgreSQL service
+4. Set environment variables:
 
-Webhook update:
+    * `APP_API_KEY`
+    * `DATABASE_URL`
+    * `DB_USERNAME`
+    * `DB_PASSWORD`
+5. Deploy
 
-```bash
-curl -i -X POST http://localhost:8080/api/webhooks/payment-provider \
--H "Content-Type: application/json" \
--H "X-Webhook-Signature: demo-secret" \
--d '{
-  "providerPaymentId":"mock_pay_xxx",
-  "eventType":"payment.refunded"
-}'
-```
+---
 
-## Railway deployment notes
+## 💼 Why This Matters (For Clients)
 
-Set these environment variables in Railway:
+This project demonstrates:
 
-- `DATABASE_URL`
-- `DB_USERNAME`
-- `DB_PASSWORD`
-- `PAYMENT_WEBHOOK_SECRET`
-- `PORT` (Railway usually injects this automatically)
+* Safe payment handling (idempotency)
+* Secure API design
+* Real-world webhook patterns
+* Production-ready architecture
+* Experience with payment gateway integration concepts
 
-## Good next upgrades
+---
 
-- Replace mock client with Stripe integration
-- Add provider signature verification using the provider SDK
-- Add OpenAPI / Swagger
-- Add tests for service and controller layers
-- Add idempotency keys for payment creation
+## 📬 Contact
+
+Available for:
+
+* Payment gateway integrations (Stripe, PayPal, etc.)
+* Backend API development
+* Spring Boot microservices
+* Production issue debugging
+
+---
+
+## 📄 License
+
+MIT
