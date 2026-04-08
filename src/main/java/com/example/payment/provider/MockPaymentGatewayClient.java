@@ -16,10 +16,18 @@ public class MockPaymentGatewayClient implements PaymentGatewayClient {
     @Override
     public ProviderChargeResult charge(CreatePaymentRequest request) {
         if (request.getAmount().doubleValue() > 9999.99) {
-            return new ProviderChargeResult("mock_fail_" + UUID.randomUUID(), false,
-                    "Amount exceeds demo gateway limit");
+            return new ProviderChargeResult(
+                    "pi_" + UUID.randomUUID().toString().replace("-", ""),
+                    false,
+                    "Amount exceeds demo gateway limit"
+            );
         }
-        return new ProviderChargeResult("mock_pay_" + UUID.randomUUID(), true, null);
+
+        return new ProviderChargeResult(
+                "pi_" + UUID.randomUUID().toString().replace("-", ""),
+                true,
+                null
+        );
     }
 
     @Override
@@ -27,13 +35,16 @@ public class MockPaymentGatewayClient implements PaymentGatewayClient {
         if (payment.getProviderPaymentId() == null) {
             return new ProviderRefundResult(null, false, "Payment has no provider payment id");
         }
-        return new ProviderRefundResult("mock_ref_" + UUID.randomUUID(), true, null);
+
+        return new ProviderRefundResult(
+                "re_" + UUID.randomUUID().toString().replace("-", ""),
+                true,
+                null
+        );
     }
 
     @Override
     public boolean isValidWebhookSignature(String signature, String rawBody) {
-        // For demo purposes, just check signature is not empty
-        // In real systems, you'd hash rawBody with a secret and compare
         return signature != null && !signature.isBlank();
     }
 }

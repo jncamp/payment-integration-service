@@ -48,7 +48,7 @@ public class PaymentService {
         payment.setCustomerName(request.getCustomerName());
         payment.setIdempotencyKey(request.getIdempotencyKey());
         payment.setStatus(PaymentStatus.PENDING);
-        payment.setProvider(PaymentProvider.MOCKPAY);
+        payment.setProvider(PaymentProvider.STRIPE);
         repository.save(payment);
 
         ProviderChargeResult result = paymentGatewayClient.charge(request);
@@ -92,12 +92,12 @@ public class PaymentService {
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Payment not found for provider payment id"));
 
         switch (eventType) {
-            case "payment.succeeded" -> {
+            case "payment_intent.succeeded" -> {
                 payment.setStatus(PaymentStatus.SUCCEEDED);
                 payment.setFailureReason(null);
             }
-            case "payment.failed" -> payment.setStatus(PaymentStatus.FAILED);
-            case "payment.refunded" -> payment.setStatus(PaymentStatus.REFUNDED);
+            case "payment_intent.payment_failed" -> payment.setStatus(PaymentStatus.FAILED);
+            case "charge.refunded" -> payment.setStatus(PaymentStatus.REFUNDED);
             default -> throw new ApiException(HttpStatus.BAD_REQUEST, "Unsupported eventType: " + eventType);
         }
 
