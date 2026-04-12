@@ -16,8 +16,18 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ValidationErrorResponse> handleValidation(MethodArgumentNotValidException ex,
+    public ResponseEntity<?> handleValidation(MethodArgumentNotValidException ex,
                                                                     HttpServletRequest request) {
+        if (isStripeLikePath(request.getRequestURI())) {
+            FieldError first = ex.getBindingResult().getFieldErrors().stream().findFirst().orElse(null);
+            Map<String, Object> error = new LinkedHashMap<>();
+            error.put("type", "invalid_request_error");
+            error.put("message", first != null ? first.getDefaultMessage() : "Validation failed");
+            error.put("param", first != null ? first.getField() : null);
+            error.put("code", "parameter_invalid");
+            return ResponseEntity.badRequest().body(Map.of("error", error));
+        }
+
         Map<String, String> errors = new LinkedHashMap<>();
         for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
             errors.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage());
@@ -34,7 +44,15 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(ApiException.class)
-    public ResponseEntity<Map<String, Object>> handleApi(ApiException ex, HttpServletRequest request) {
+    public ResponseEntity<?> handleApi(ApiException ex, HttpServletRequest request) {
+        if (isStripeLikePath(request.getRequestURI())) {
+            Map<String, Object> error = new LinkedHashMap<>();
+            error.put("type", mapErrorType(ex.getStatus()));
+            error.put("message", ex.getMessage());
+            error.put("code", ex.getStatus().is4xxClientError() ? "request_error" : "provider_error");
+            return ResponseEntity.status(ex.getStatus()).body(Map.of("error", error));
+        }
+
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("timestamp", OffsetDateTime.now());
         body.put("status", ex.getStatus().value());
@@ -42,5 +60,19 @@ public class GlobalExceptionHandler {
         body.put("message", ex.getMessage());
         body.put("path", request.getRequestURI());
         return ResponseEntity.status(ex.getStatus()).body(body);
+    }
+
+    private boolean isStripeLikePath(String path) {
+        return path.startsWith("/api/payment_intents") || path.startsWith("/api/refunds") || path.startsWith("/api/webhooks/stripe");
+    }
+
+    private String mapErrorType(HttpStatus status) {
+        if (status == HttpStatus.UNAUTHORIZED) {
+            return "authentication_error";
+        }
+        if (status.is4xxClientError()) {
+            return "invalid_request_error";
+        }
+        return "api_error";
     }
 }

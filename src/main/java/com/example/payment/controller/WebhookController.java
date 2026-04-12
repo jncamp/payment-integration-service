@@ -1,17 +1,15 @@
 package com.example.payment.controller;
 
 import com.example.payment.dto.WebhookEventRequest;
+import com.example.payment.dto.stripe.StripeEventResponse;
 import com.example.payment.exception.ApiException;
 import com.example.payment.service.PaymentService;
-import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
-
 @RestController
-@RequestMapping("/api/webhooks/payment-provider")
+@RequestMapping("/api/webhooks")
 public class WebhookController {
 
     private final PaymentService paymentService;
@@ -20,8 +18,8 @@ public class WebhookController {
         this.paymentService = paymentService;
     }
 
-    @PostMapping
-    public ResponseEntity<Map<String, String>> handleWebhook(
+    @PostMapping({"/payment-provider", "/stripe"})
+    public ResponseEntity<StripeEventResponse> handleWebhook(
             @RequestHeader(value = "X-Webhook-Signature", required = false) String signature,
             @RequestBody String rawBody) {
 
@@ -30,7 +28,7 @@ public class WebhookController {
         }
 
         WebhookEventRequest request = WebhookEventRequest.fromJson(rawBody);
-
-        paymentService.processWebhook(request.getProviderPaymentId(), request.getEventType());
-        return ResponseEntity.ok(Map.of("message", "Webhook processed"));
-    }}
+        StripeEventResponse response = paymentService.processWebhook(request.getProviderPaymentId(), request.getEventType());
+        return ResponseEntity.ok(response);
+    }
+}
