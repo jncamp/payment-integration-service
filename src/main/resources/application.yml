@@ -30,3 +30,6 @@ management:
 payment:
   webhook:
     secret: ${PAYMENT_WEBHOOK_SECRET:demo-secret}
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET}

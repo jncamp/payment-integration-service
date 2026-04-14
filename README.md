@@ -1,136 +1,150 @@
-# Payment Integration API (Stripe-Style)
+# Payment Integration Service
 
-A production-style payment processing API built with Java Spring Boot and PostgreSQL, designed to mimic Stripe’s Payment Intent workflow.
-
-## 🚀 Features
-
-* Stripe-style Payment Intent lifecycle
-
-  * create → confirm → retrieve
-* Idempotent request handling (prevents duplicate payments)
-* Refund support
-* Webhook simulation
-* API key security
-* PostgreSQL persistence with Flyway migrations
-* Deployed to cloud (Railway)
+A Spring Boot payment integration demo with full Stripe support including webhooks.
 
 ---
 
-## 🧪 API Endpoints
+## Features
 
-### Create Payment Intent
+- Create PaymentIntent
+- Confirm PaymentIntent
+- Refund PaymentIntent
+- Stripe Webhook Handling (real, verified)
+- PostgreSQL + Flyway
+- API Key Security
+- Local + Railway Deployment
 
-POST /api/payment_intents
+---
+
+## Environment Variables
 
 ```bash
-curl -X POST https://payment-integration-service-production-18ae.up.railway.app/api/payment_intents \
--H "Content-Type: application/json" \
--H "X-API-KEY: change-me-dev-key" \
--H "Idempotency-Key: demo-123" \
--d '{
-  "amount": 1000,
-  "currency": "usd",
-  "customerName": "John Doe",
-  "customerEmail": "john@example.com"
-}'
-```
-
-Response:
-
-```json
-{
-  "id": "pi_123",
-  "object": "payment_intent",
-  "status": "requires_confirmation",
-  "clientSecret": "pi_123_secret_abc"
-}
+STRIPE_SECRET_KEY=sk_test_your_key
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+APP_API_KEY=change-me-dev-key
 ```
 
 ---
 
-### Confirm Payment Intent
+## Base URL
 
-POST /api/payment_intents/{id}/confirm
+Local:
+```bash
+http://localhost:8080
+```
+
+Railway:
+```bash
+https://payment-integration-service-production-18ae.up.railway.app
+```
+
+---
+
+## Authentication
 
 ```bash
-curl -X POST https://payment-integration-service-production-18ae.up.railway.app/api/payment_intents/pi_123/confirm \
--H "X-API-KEY: change-me-dev-key"
+-H "X-API-Key: change-me-dev-key"
 ```
 
 ---
 
-### Get Payment Intent
+# API Endpoints
 
-GET /api/payment_intents/{id}
+## Create PaymentIntent
 
 ```bash
-curl https://payment-integration-service-production-18ae.up.railway.app/api/payment_intents/pi_123 \
--H "X-API-KEY: change-me-dev-key"
+curl -X POST "$BASE_URL/api/payment_intents" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: demo-001" \
+  -H "X-API-Key: change-me-dev-key" \
+  -d '{"amount":2000,"currency":"usd","customerName":"John Camp","customerEmail":"john@example.com"}'
 ```
 
 ---
 
-### Refund
-
-POST /api/refunds
+## Confirm PaymentIntent
 
 ```bash
-curl -X POST https://payment-integration-service-production-18ae.up.railway.app/api/refunds \
--H "Content-Type: application/json" \
--H "X-API-KEY: change-me-dev-key" \
--d '{
-  "paymentIntentId": "pi_123",
-  "amount": 1000
-}'
+curl -X POST "$BASE_URL/api/payment_intents/pi_123/confirm" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: change-me-dev-key" \
+  -d '{"paymentMethodId":"pm_card_visa"}'
 ```
 
 ---
 
-### Webhook Simulation
-
-POST /api/webhooks/stripe
+## Refund
 
 ```bash
-curl -X POST https://payment-integration-service-production-18ae.up.railway.app/api/webhooks/stripe \
--H "Content-Type: application/json" \
--d '{
-  "id": "evt_test_123",
-  "type": "payment_intent.succeeded",
-  "data": {
-    "object": {
-      "id": "pi_123",
-      "status": "succeeded"
-    }
-  }
-}'
+curl -X POST "$BASE_URL/api/refunds" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: change-me-dev-key" \
+  -d '{"paymentIntentId":"pi_123"}'
 ```
 
 ---
 
-## 🧠 Architecture
+# Webhooks (IMPORTANT)
 
-Controller → Service → Repository → PostgreSQL
+## Start Stripe CLI
 
-* Spring Boot (REST API)
-* JPA / Hibernate (ORM)
-* Flyway (database migrations)
-* Railway (cloud deployment)
+```bash
+stripe listen --forward-to localhost:8080/api/webhooks/stripe
+```
+
+Copy the webhook secret:
+
+```bash
+whsec_...
+```
+
+Add it to your environment:
+
+```bash
+STRIPE_WEBHOOK_SECRET=whsec_...
+```
+
+Restart the app.
 
 ---
 
-## 💡 Why this project?
+## Trigger Test Event
 
-This project demonstrates real-world backend capabilities:
-
-* Payment processing workflows
-* API design and validation
-* Database integration
-* Idempotency and reliability
-* Production deployment
+```bash
+stripe trigger payment_intent.succeeded
+```
 
 ---
 
-## 👤 Author
+## Expected Output
 
-John Camp
-Senior Java Developer (20+ years experience)
+```bash
+--> payment_intent.succeeded
+<-- [200] POST /api/webhooks/stripe
+```
+
+---
+
+## Flow
+
+```text
+Stripe CLI -> Spring Boot Webhook -> PaymentService -> Database
+```
+
+---
+
+## Notes
+
+- Webhook signature is verified using Stripe SDK
+- Secret keys are never exposed to clients
+- Designed for real-world backend payment systems
+
+---
+
+## Status
+
+- Payments: Working
+- Refunds: Working
+- Webhooks: Working
+- Railway Deployment: Working
+- 

@@ -18,7 +18,7 @@ public class WebhookController {
         this.paymentService = paymentService;
     }
 
-    @PostMapping({"/payment-provider", "/stripe"})
+    @PostMapping("/payment-provider")
     public ResponseEntity<StripeEventResponse> handleWebhook(
             @RequestHeader(value = "X-Webhook-Signature", required = false) String signature,
             @RequestBody String rawBody) {

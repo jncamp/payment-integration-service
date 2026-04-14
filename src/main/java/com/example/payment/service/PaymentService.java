@@ -1,5 +1,5 @@
 package com.example.payment.service;
-
+import com.stripe.model.Event;
 import com.example.payment.dto.CreatePaymentRequest;
 import com.example.payment.dto.PaymentResponse;
 import com.example.payment.dto.RefundPaymentRequest;
@@ -11,10 +11,16 @@ import com.example.payment.exception.ApiException;
 import com.example.payment.provider.PaymentGatewayClient;
 import com.example.payment.provider.ProviderChargeResult;
 import com.example.payment.provider.ProviderRefundResult;
+import com.example.payment.provider.StripePaymentGatewayClient;
 import com.example.payment.repository.PaymentTransactionRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.stripe.exception.StripeException;
+import com.stripe.model.PaymentIntent;
+import com.stripe.model.Refund;
+import com.stripe.param.PaymentIntentConfirmParams;
+import com.stripe.param.RefundCreateParams;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,15 +36,18 @@ import java.util.UUID;
 @Service
 public class PaymentService {
 
+    private final StripePaymentGatewayClient stripePaymentGatewayClient;
     private final PaymentTransactionRepository repository;
     private final PaymentGatewayClient paymentGatewayClient;
     private final ObjectMapper objectMapper;
 
     public PaymentService(PaymentTransactionRepository repository,
                           PaymentGatewayClient paymentGatewayClient,
+                          StripePaymentGatewayClient stripePaymentGatewayClient,
                           ObjectMapper objectMapper) {
         this.repository = repository;
         this.paymentGatewayClient = paymentGatewayClient;
+        this.stripePaymentGatewayClient = stripePaymentGatewayClient;
         this.objectMapper = objectMapper;
     }
 
@@ -65,6 +74,7 @@ public class PaymentService {
         ProviderChargeResult result = paymentGatewayClient.charge(request);
         payment.setProviderPaymentId(result.getProviderPaymentId());
         payment.setLatestChargeId("ch_" + randomCompactId());
+
         if (result.isSuccess()) {
             payment.setStatus(PaymentStatus.SUCCEEDED);
             payment.setFailureReason(null);
@@ -84,6 +94,7 @@ public class PaymentService {
     @Transactional
     public PaymentResponse refundPayment(UUID id, RefundPaymentRequest request) {
         PaymentTransaction payment = findPayment(id);
+
         if (payment.getStatus() != PaymentStatus.SUCCEEDED) {
             throw new ApiException(HttpStatus.CONFLICT, "Only SUCCEEDED payments can be refunded");
         }
@@ -107,49 +118,95 @@ public class PaymentService {
             }
         }
 
-        PaymentTransaction payment = new PaymentTransaction();
-        payment.setAmount(toDecimalAmount(request.getAmount()));
-        payment.setCurrency(request.getCurrency().toUpperCase());
-        payment.setCustomerEmail(request.getCustomerEmail());
-        payment.setCustomerName(request.getCustomerName());
-        payment.setIdempotencyKey(idempotencyKey);
-        payment.setStatus(PaymentStatus.REQUIRES_CONFIRMATION);
-        payment.setProvider(PaymentProvider.STRIPE);
-        payment.setProviderPaymentId("pi_" + randomCompactId());
-        payment.setClientSecret(payment.getProviderPaymentId() + "_secret_" + randomCompactId());
-        payment.setMetadataJson(writeMetadata(request.getMetadata()));
-        return toStripePaymentIntent(repository.save(payment), false);
+        try {
+            PaymentIntent stripeIntent = stripePaymentGatewayClient.createPaymentIntent(
+                    request.getAmount(),
+                    request.getCurrency().toLowerCase()
+            );
+
+            PaymentTransaction payment = new PaymentTransaction();
+            payment.setAmount(toDecimalAmount(request.getAmount()));
+            payment.setCurrency(request.getCurrency().toUpperCase());
+            payment.setCustomerEmail(request.getCustomerEmail());
+            payment.setCustomerName(request.getCustomerName());
+            payment.setIdempotencyKey(idempotencyKey);
+            payment.setProvider(PaymentProvider.STRIPE);
+            payment.setProviderPaymentId(stripeIntent.getId());
+            payment.setClientSecret(stripeIntent.getClientSecret());
+            payment.setMetadataJson(writeMetadata(request.getMetadata()));
+
+            String stripeStatus = stripeIntent.getStatus();
+            if ("requires_confirmation".equals(stripeStatus)) {
+                payment.setStatus(PaymentStatus.REQUIRES_CONFIRMATION);
+            } else if ("requires_action".equals(stripeStatus)) {
+                payment.setStatus(PaymentStatus.REQUIRES_ACTION);
+            } else if ("processing".equals(stripeStatus)) {
+                payment.setStatus(PaymentStatus.PROCESSING);
+            } else if ("succeeded".equals(stripeStatus)) {
+                payment.setStatus(PaymentStatus.SUCCEEDED);
+            } else if ("canceled".equals(stripeStatus)) {
+                payment.setStatus(PaymentStatus.CANCELED);
+            } else {
+                payment.setStatus(PaymentStatus.REQUIRES_PAYMENT_METHOD);
+            }
+
+            return toStripePaymentIntent(repository.save(payment), false);
+
+        } catch (Exception e) {
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "Stripe create payment intent failed: " + e.getMessage());
+        }
     }
 
     @Transactional
-    public StripePaymentIntentResponse confirmPaymentIntent(String paymentIntentId, ConfirmPaymentIntentRequest request) {
+    public StripePaymentIntentResponse confirmPaymentIntent(
+            String paymentIntentId,
+            ConfirmPaymentIntentRequest request
+    ) {
         PaymentTransaction payment = findByProviderPaymentId(paymentIntentId);
 
         if (payment.getStatus() == PaymentStatus.SUCCEEDED || payment.getStatus() == PaymentStatus.REFUNDED) {
             return toStripePaymentIntent(payment, false);
         }
 
-        payment.setStatus(PaymentStatus.PROCESSING);
-        repository.save(payment);
+        try {
+            PaymentIntent stripeIntent = PaymentIntent.retrieve(paymentIntentId);
 
-        CreatePaymentRequest chargeRequest = new CreatePaymentRequest();
-        chargeRequest.setAmount(payment.getAmount());
-        chargeRequest.setCurrency(payment.getCurrency());
-        chargeRequest.setCustomerEmail(payment.getCustomerEmail());
-        chargeRequest.setCustomerName(payment.getCustomerName());
+            PaymentIntentConfirmParams.Builder paramsBuilder = PaymentIntentConfirmParams.builder();
 
-        ProviderChargeResult result = paymentGatewayClient.charge(chargeRequest);
-        payment.setLatestChargeId("ch_" + randomCompactId());
+            if (request != null
+                    && request.getPaymentMethodId() != null
+                    && !request.getPaymentMethodId().isBlank()) {
+                paramsBuilder.setPaymentMethod(request.getPaymentMethodId().trim());
+            }
 
-        if (result.isSuccess()) {
-            payment.setStatus(PaymentStatus.SUCCEEDED);
-            payment.setFailureReason(null);
-        } else {
+            stripeIntent = stripeIntent.confirm(paramsBuilder.build());
+
+            payment.setLatestChargeId(stripeIntent.getLatestCharge());
+            payment.setFailureReason(
+                    stripeIntent.getLastPaymentError() != null
+                            ? stripeIntent.getLastPaymentError().getMessage()
+                            : null
+            );
+
+            switch (stripeIntent.getStatus()) {
+                case "succeeded" -> payment.setStatus(PaymentStatus.SUCCEEDED);
+                case "processing" -> payment.setStatus(PaymentStatus.PROCESSING);
+                case "requires_payment_method", "canceled" -> payment.setStatus(PaymentStatus.FAILED);
+                case "requires_action", "requires_confirmation", "requires_capture" ->
+                        payment.setStatus(PaymentStatus.PROCESSING);
+                default -> payment.setStatus(PaymentStatus.PROCESSING);
+            }
+
+            repository.save(payment);
+            return toStripePaymentIntent(payment, false);
+
+        } catch (StripeException e) {
             payment.setStatus(PaymentStatus.FAILED);
-            payment.setFailureReason(result.getFailureReason());
+            payment.setFailureReason(e.getMessage());
+            repository.save(payment);
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Stripe confirm payment intent failed: " + e.getMessage());
         }
-
-        return toStripePaymentIntent(repository.save(payment), false);
     }
 
     @Transactional(readOnly = true)
@@ -160,32 +217,85 @@ public class PaymentService {
     @Transactional
     public StripeRefundResponse createRefund(CreateRefundRequest request) {
         PaymentTransaction payment = findByProviderPaymentId(request.getPaymentIntentId());
+
         if (payment.getStatus() != PaymentStatus.SUCCEEDED) {
             throw new ApiException(HttpStatus.CONFLICT, "Only succeeded payment intents can be refunded");
         }
 
-        ProviderRefundResult result = paymentGatewayClient.refund(payment, request.getReason());
-        if (!result.isSuccess()) {
-            throw new ApiException(HttpStatus.BAD_GATEWAY, result.getFailureReason());
+        try {
+            RefundCreateParams.Builder paramsBuilder = RefundCreateParams.builder();
+
+            if (payment.getLatestChargeId() != null && !payment.getLatestChargeId().isBlank()) {
+                paramsBuilder.setCharge(payment.getLatestChargeId());
+            } else if (payment.getProviderPaymentId() != null && !payment.getProviderPaymentId().isBlank()) {
+                paramsBuilder.setPaymentIntent(payment.getProviderPaymentId());
+            } else {
+                throw new ApiException(HttpStatus.CONFLICT,
+                        "No Stripe charge or payment intent available for refund");
+            }
+
+            if (request.getAmount() != null) {
+                long refundAmount = request.getAmount();
+
+                if (refundAmount <= 0) {
+                    throw new ApiException(HttpStatus.BAD_REQUEST,
+                            "Refund amount must be greater than zero");
+                }
+
+                if (refundAmount > toMinorUnits(payment.getAmount())) {
+                    throw new ApiException(HttpStatus.BAD_REQUEST,
+                            "Refund amount cannot exceed original payment amount");
+                }
+
+                paramsBuilder.setAmount(refundAmount);
+            }
+
+            if (request.getReason() != null && !request.getReason().isBlank()) {
+                switch (request.getReason()) {
+                    case "duplicate" ->
+                            paramsBuilder.setReason(RefundCreateParams.Reason.DUPLICATE);
+                    case "fraudulent" ->
+                            paramsBuilder.setReason(RefundCreateParams.Reason.FRAUDULENT);
+                    case "requested_by_customer" ->
+                            paramsBuilder.setReason(RefundCreateParams.Reason.REQUESTED_BY_CUSTOMER);
+                    default -> {
+                        // ignore unsupported values and let Stripe use no reason
+                    }
+                }
+            }
+
+            Refund refund = Refund.create(paramsBuilder.build());
+
+            payment.setProviderRefundId(refund.getId());
+            payment.setStatus(PaymentStatus.REFUNDED);
+            payment.setFailureReason(null);
+
+            PaymentTransaction saved = repository.save(payment);
+
+            StripeRefundResponse response = new StripeRefundResponse();
+            response.setId(refund.getId());
+            response.setObject("refund");
+            response.setPaymentIntent(saved.getProviderPaymentId());
+            response.setCharge(refund.getCharge());
+            response.setAmount(refund.getAmount());
+            response.setCurrency(refund.getCurrency());
+            response.setReason(refund.getReason());
+            response.setStatus(refund.getStatus());
+            response.setCreated(refund.getCreated());
+            return response;
+
+        } catch (StripeException e) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Stripe refund failed: " + e.getMessage());
         }
-
-        payment.setProviderRefundId(result.getProviderRefundId());
-        payment.setStatus(PaymentStatus.REFUNDED);
-        PaymentTransaction saved = repository.save(payment);
-
-        StripeRefundResponse response = new StripeRefundResponse();
-        response.setId(saved.getProviderRefundId());
-        response.setObject("refund");
-        response.setPaymentIntent(saved.getProviderPaymentId());
-        response.setCharge(saved.getLatestChargeId());
-        response.setAmount(toMinorUnits(saved.getAmount()));
-        response.setCurrency(saved.getCurrency().toLowerCase());
-        response.setReason(request.getReason());
-        response.setStatus("succeeded");
-        response.setCreated(saved.getUpdatedAt().toEpochSecond());
-        return response;
+    }
+    public void handleStripePaymentIntentSucceeded(Event event) {
+        System.out.println("SUCCESS: " + event.getId());
     }
 
+    public void handleStripePaymentIntentFailed(Event event) {
+        System.out.println("FAILED: " + event.getId());
+    }
     @Transactional
     public StripeEventResponse processWebhook(String providerPaymentId, String eventType) {
         PaymentTransaction payment = repository.findByProviderPaymentId(providerPaymentId)
