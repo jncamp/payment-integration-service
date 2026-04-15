@@ -164,7 +164,9 @@ public class PaymentService {
     ) {
         PaymentTransaction payment = findByProviderPaymentId(paymentIntentId);
 
-        if (payment.getStatus() == PaymentStatus.SUCCEEDED || payment.getStatus() == PaymentStatus.REFUNDED) {
+        if (payment.getStatus() == PaymentStatus.SUCCEEDED
+                || payment.getStatus() == PaymentStatus.PARTIALLY_REFUNDED
+                || payment.getStatus() == PaymentStatus.REFUNDED) {
             return toStripePaymentIntent(payment, false);
         }
 
@@ -218,11 +220,21 @@ public class PaymentService {
     public StripeRefundResponse createRefund(CreateRefundRequest request) {
         PaymentTransaction payment = findByProviderPaymentId(request.getPaymentIntentId());
 
-        if (payment.getStatus() != PaymentStatus.SUCCEEDED) {
-            throw new ApiException(HttpStatus.CONFLICT, "Only succeeded payment intents can be refunded");
+        if (payment.getStatus() != PaymentStatus.SUCCEEDED
+                && payment.getStatus() != PaymentStatus.PARTIALLY_REFUNDED) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Only succeeded or partially refunded payment intents can be refunded");
         }
 
         try {
+            long originalAmount = toMinorUnits(payment.getAmount());
+            long alreadyRefunded = payment.getRefundedAmount() != null ? payment.getRefundedAmount() : 0L;
+            long remainingRefundable = originalAmount - alreadyRefunded;
+
+            if (remainingRefundable <= 0) {
+                throw new ApiException(HttpStatus.CONFLICT, "Payment is already fully refunded");
+            }
+
             RefundCreateParams.Builder paramsBuilder = RefundCreateParams.builder();
 
             if (payment.getLatestChargeId() != null && !payment.getLatestChargeId().isBlank()) {
@@ -234,17 +246,18 @@ public class PaymentService {
                         "No Stripe charge or payment intent available for refund");
             }
 
+            long refundAmount = remainingRefundable;
             if (request.getAmount() != null) {
-                long refundAmount = request.getAmount();
+                refundAmount = request.getAmount();
 
                 if (refundAmount <= 0) {
                     throw new ApiException(HttpStatus.BAD_REQUEST,
                             "Refund amount must be greater than zero");
                 }
 
-                if (refundAmount > toMinorUnits(payment.getAmount())) {
+                if (refundAmount > remainingRefundable) {
                     throw new ApiException(HttpStatus.BAD_REQUEST,
-                            "Refund amount cannot exceed original payment amount");
+                            "Refund amount cannot exceed remaining refundable amount");
                 }
 
                 paramsBuilder.setAmount(refundAmount);
@@ -266,9 +279,17 @@ public class PaymentService {
 
             Refund refund = Refund.create(paramsBuilder.build());
 
+            long newRefundedTotal = alreadyRefunded + refund.getAmount();
+
             payment.setProviderRefundId(refund.getId());
-            payment.setStatus(PaymentStatus.REFUNDED);
+            payment.setRefundedAmount(newRefundedTotal);
             payment.setFailureReason(null);
+
+            if (newRefundedTotal >= originalAmount) {
+                payment.setStatus(PaymentStatus.REFUNDED);
+            } else {
+                payment.setStatus(PaymentStatus.PARTIALLY_REFUNDED);
+            }
 
             PaymentTransaction saved = repository.save(payment);
 
@@ -309,7 +330,10 @@ public class PaymentService {
             case "payment_intent.processing" -> payment.setStatus(PaymentStatus.PROCESSING);
             case "payment_intent.payment_failed" -> payment.setStatus(PaymentStatus.FAILED);
             case "payment_intent.canceled" -> payment.setStatus(PaymentStatus.CANCELED);
-            case "charge.refunded" -> payment.setStatus(PaymentStatus.REFUNDED);
+            case "charge.refunded" -> {
+                payment.setRefundedAmount(toMinorUnits(payment.getAmount()));
+                payment.setStatus(PaymentStatus.REFUNDED);
+            }
             default -> throw new ApiException(HttpStatus.BAD_REQUEST, "Unsupported eventType: " + eventType);
         }
 
@@ -352,6 +376,7 @@ public class PaymentService {
         response.setMetadata(readMetadata(payment.getMetadataJson()));
         response.setCreated(payment.getCreatedAt().atZoneSameInstant(ZoneOffset.UTC).toEpochSecond());
         response.setLatestCharge(payment.getLatestChargeId());
+        response.setRefundedAmount(payment.getRefundedAmount());
         response.setIdempotentReplay(replay);
         return response;
     }
@@ -365,6 +390,7 @@ public class PaymentService {
             case SUCCEEDED -> "succeeded";
             case FAILED -> "payment_failed";
             case CANCELED -> "canceled";
+            case PARTIALLY_REFUNDED -> "partially_refunded";
             case REFUNDED -> "refunded";
         };
     }

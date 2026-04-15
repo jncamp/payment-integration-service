@@ -1,0 +1,2 @@
+ALTER TABLE payments
+    ADD COLUMN IF NOT EXISTS refunded_amount BIGINT NOT NULL DEFAULT 0;

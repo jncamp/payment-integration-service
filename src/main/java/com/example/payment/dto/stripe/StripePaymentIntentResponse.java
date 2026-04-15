@@ -14,6 +14,7 @@ public class StripePaymentIntentResponse {
     private Map<String, String> metadata;
     private Long created;
     private String latestCharge;
+    private Long refundedAmount;
     private boolean idempotentReplay;
 
     public String getId() { return id; }
@@ -38,6 +39,8 @@ public class StripePaymentIntentResponse {
     public void setCreated(Long created) { this.created = created; }
     public String getLatestCharge() { return latestCharge; }
     public void setLatestCharge(String latestCharge) { this.latestCharge = latestCharge; }
+    public Long getRefundedAmount() { return refundedAmount; }
+    public void setRefundedAmount(Long refundedAmount) { this.refundedAmount = refundedAmount; }
     public boolean isIdempotentReplay() { return idempotentReplay; }
     public void setIdempotentReplay(boolean idempotentReplay) { this.idempotentReplay = idempotentReplay; }
 }

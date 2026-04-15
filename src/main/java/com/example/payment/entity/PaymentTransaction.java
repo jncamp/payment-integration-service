@@ -50,6 +50,8 @@ public class PaymentTransaction {
 
     @Column(length = 120)
     private String providerRefundId;
+    @Column(name = "refunded_amount", nullable = false)
+    private Long refundedAmount = 0L;
 
     @Column(length = 255)
     private String failureReason;
@@ -92,6 +94,8 @@ public class PaymentTransaction {
     public void setProviderPaymentId(String providerPaymentId) { this.providerPaymentId = providerPaymentId; }
     public String getProviderRefundId() { return providerRefundId; }
     public void setProviderRefundId(String providerRefundId) { this.providerRefundId = providerRefundId; }
+    public Long getRefundedAmount() { return refundedAmount; }
+    public void setRefundedAmount(Long refundedAmount) { this.refundedAmount = refundedAmount; }
     public String getFailureReason() { return failureReason; }
     public void setFailureReason(String failureReason) { this.failureReason = failureReason; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
