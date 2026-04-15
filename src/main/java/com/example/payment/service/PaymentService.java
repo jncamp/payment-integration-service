@@ -96,7 +96,7 @@ public class PaymentService {
         PaymentTransaction payment = findPayment(id);
 
         if (payment.getStatus() != PaymentStatus.SUCCEEDED) {
-            throw new ApiException(HttpStatus.CONFLICT, "Only SUCCEEDED payments can be refunded");
+            throw new ApiException(HttpStatus.CONFLICT, "\"Only succeeded or partially refunded payment intents can be refunded [railway-check]\"");
         }
 
         ProviderRefundResult result = paymentGatewayClient.refund(payment, request.getReason());
