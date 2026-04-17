@@ -28,6 +28,9 @@ public class CreatePaymentRequest {
     @Size(max = 120, message = "customerName must be 120 characters or less")
     private String customerName;
 
+    @Size(max = 120, message = "paymentMethodId must be 120 characters or less")
+    private String paymentMethodId;
+
     public BigDecimal getAmount() {
         return amount;
     }
@@ -66,5 +69,13 @@ public class CreatePaymentRequest {
 
     public void setIdempotencyKey(String idempotencyKey) {
         this.idempotencyKey = idempotencyKey;
+    }
+
+    public String getPaymentMethodId() {
+        return paymentMethodId;
+    }
+
+    public void setPaymentMethodId(String paymentMethodId) {
+        this.paymentMethodId = paymentMethodId;
     }
 }
