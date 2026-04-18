@@ -150,7 +150,12 @@ public class PaymentService {
                     request.getCurrency().toLowerCase(),
                     writeMetadata(request.getMetadata())
             );
-            Customer customer = getOrCreateCustomer(client, request.getCustomerEmail(), request.getCustomerName(), request.getCurrency().toUpperCase());
+            Customer customer = getOrCreateCustomer(
+                    client,
+                    request.getCustomerEmail(),
+                    request.getCustomerName(),
+                    request.getCurrency().toUpperCase()
+            );
 
             PaymentIntentEntity payment = new PaymentIntentEntity();
             payment.setClient(client);
@@ -166,11 +171,24 @@ public class PaymentService {
             payment.setStatus(mapStripeIntentStatus(stripeIntent.getStatus()));
             payment = paymentIntentRepository.save(payment);
             return toStripePaymentIntent(payment, false);
+
         } catch (StripeException e) {
-            throw new ApiException(HttpStatus.BAD_GATEWAY, "Stripe create payment intent failed: " + e.getMessage());
+            Integer statusCode = e.getStatusCode();
+
+            if (statusCode != null && statusCode >= 400 && statusCode < 500) {
+                throw new ApiException(
+                        HttpStatus.BAD_REQUEST,
+                        "Invalid payment intent request: " + e.getMessage()
+                );
+            }
+
+            throw new ApiException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Stripe create payment intent failed: " + e.getMessage()
+            );
         }
     }
-
+    
     @Transactional
     public StripePaymentIntentResponse confirmPaymentIntent(String paymentIntentId, ConfirmPaymentIntentRequest request) {
         PaymentIntentEntity payment = findByProviderPaymentId(paymentIntentId);
