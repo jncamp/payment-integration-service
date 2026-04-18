@@ -188,7 +188,7 @@ public class PaymentService {
             );
         }
     }
-    
+
     @Transactional
     public StripePaymentIntentResponse confirmPaymentIntent(String paymentIntentId, ConfirmPaymentIntentRequest request) {
         PaymentIntentEntity payment = findByProviderPaymentId(paymentIntentId);
