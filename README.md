@@ -222,6 +222,8 @@ It demonstrates:
 
 ---
 
-# 👨‍💻 Author
-John Camp
+## 👨‍💻 Author
+
+**John Camp**
+
 Built as a serious backend portfolio project focused on production payments engineering.
