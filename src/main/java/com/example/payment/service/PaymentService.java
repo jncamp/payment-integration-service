@@ -231,7 +231,10 @@ public class PaymentService {
                     case "duplicate" -> paramsBuilder.setReason(RefundCreateParams.Reason.DUPLICATE);
                     case "fraudulent" -> paramsBuilder.setReason(RefundCreateParams.Reason.FRAUDULENT);
                     case "requested_by_customer" -> paramsBuilder.setReason(RefundCreateParams.Reason.REQUESTED_BY_CUSTOMER);
-                    default -> { }
+                    default -> throw new ApiException(
+                            HttpStatus.BAD_REQUEST,
+                            "Unsupported refund reason. Allowed values: duplicate, fraudulent, requested_by_customer"
+                    );
                 }
             }
 
