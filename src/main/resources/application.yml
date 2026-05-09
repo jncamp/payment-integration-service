@@ -1,0 +1,38 @@
+server:
+  port: ${PORT:8080}
+app:
+  security:
+    api-key: ${APP_API_KEY:change-me-dev-key}
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/payment_demo}
+    username: ${DB_USERNAME:ecommerce}
+    password: ${DB_PASSWORD:ecommerce}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
+  flyway:
+    enabled: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+payment:
+  webhook:
+    secret: ${PAYMENT_WEBHOOK_SECRET:demo-secret}
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY:sk_test_dummy_local_key}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET:whsec_dummy_local_secret}
+jwt:
+  secret: ${JWT_SECRET:local-dev-super-secret-jwt-key-123456789}
+  expiration-ms: ${JWT_EXPIRATION_MS:86400000}

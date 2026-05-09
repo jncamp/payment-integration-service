@@ -1,0 +1,9 @@
+target/
+*.log
+*.class
+.idea/
+*.iml
+node_modules/
+.env
+application-local.yml
+

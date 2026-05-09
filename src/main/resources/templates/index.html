@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stripe Payment Integration API</title>
+    <style>
+        :root {
+            --bg: #f6f8fb;
+            --card: #ffffff;
+            --text: #1f2937;
+            --muted: #5f6b7a;
+            --border: #d9e1ec;
+            --accent: #2563eb;
+            --accent-dark: #1d4ed8;
+            --success: #166534;
+            --danger: #b91c1c;
+            --code: #111827;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 42px 20px;
+        }
+        .hero {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 34px;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+        }
+        h1 { margin: 0 0 10px; font-size: 2.2rem; }
+        h2 { margin: 0 0 12px; font-size: 1.25rem; }
+        h3 { margin: 16px 0 8px; font-size: 1rem; }
+        .subtitle { margin: 0; color: var(--muted); font-size: 1.05rem; }
+        .badge {
+            display: inline-block;
+            margin-bottom: 14px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: #e8f0ff;
+            color: #174ea6;
+            font-weight: 700;
+            font-size: 0.85rem;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 18px;
+            margin-top: 22px;
+        }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 22px;
+        }
+        .demo-card { grid-column: 1 / -1; }
+        ul { margin: 0; padding-left: 20px; }
+        li { margin: 7px 0; }
+        label {
+            display: block;
+            margin: 12px 0 5px;
+            font-weight: 700;
+        }
+        input, select {
+            width: 100%;
+            padding: 11px 12px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-size: 1rem;
+        }
+        button {
+            border: none;
+            border-radius: 10px;
+            padding: 12px 16px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            background: var(--accent);
+            color: white;
+            margin-top: 14px;
+            margin-right: 8px;
+        }
+        button:hover { background: var(--accent-dark); }
+        button.secondary { background: #334155; }
+        button:disabled { opacity: 0.55; cursor: not-allowed; }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 14px;
+        }
+        .hint { color: var(--muted); font-size: 0.92rem; margin-top: 8px; }
+        .status-line { margin-top: 12px; font-weight: 700; }
+        .ok { color: var(--success); }
+        .error { color: var(--danger); }
+        code, pre { font-family: Consolas, Monaco, 'Courier New', monospace; }
+        pre {
+            background: var(--code);
+            color: #f9fafb;
+            padding: 16px;
+            border-radius: 12px;
+            overflow-x: auto;
+            font-size: 0.9rem;
+            min-height: 74px;
+        }
+        .footer {
+            margin-top: 22px;
+            color: var(--muted);
+            font-size: 0.95rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <section class="hero">
+        <span class="badge">Live Spring Boot API</span>
+        <h1>Stripe Payment Integration API</h1>
+        <p class="subtitle">
+            A production-style Java/Spring Boot backend demonstrating Stripe Payment Intents, refunds,
+            webhook handling, API key security, PostgreSQL persistence, Docker, and Railway deployment.
+        </p>
+    </section>
+
+    <div class="grid">
+        <div class="card demo-card">
+            <h2>Try the payment workflow</h2>
+            <p>
+                This public demo form creates a Stripe test Payment Intent and confirms it with Stripe's
+                test payment method <code>pm_card_visa</code>. No real card or real charge is used.
+            </p>
+
+            <div class="form-grid">
+                <div>
+                    <label for="amount">Amount in cents</label>
+                    <input id="amount" type="number" min="1" value="1000">
+                </div>
+                <div>
+                    <label for="currency">Currency</label>
+                    <select id="currency">
+                        <option value="usd">usd</option>
+                        <option value="eur">eur</option>
+                        <option value="gbp">gbp</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="customerName">Customer name</label>
+                    <input id="customerName" value="Demo Customer">
+                </div>
+                <div>
+                    <label for="customerEmail">Customer email</label>
+                    <input id="customerEmail" type="email" value="demo@example.com">
+                </div>
+            </div>
+
+            <button id="createBtn" onclick="createPaymentIntent()">1. Create payment intent</button>
+            <button id="confirmBtn" class="secondary" onclick="confirmPaymentIntent()" disabled>2. Confirm test payment</button>
+            <button id="refundBtn" class="secondary" onclick="refundPaymentIntent()" disabled>3. Refund payment</button>
+
+            <p id="status" class="status-line">Ready.</p>
+            <pre id="result">Click "Create payment intent" to begin.</pre>
+
+            <p class="hint">
+                The real REST API remains protected by <code>X-API-Key</code>. This form uses separate public demo endpoints
+                under <code>/demo/api</code> so clients can test the deployed project without Postman.
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>What this service demonstrates</h2>
+            <ul>
+                <li>Create and confirm Stripe payment intents</li>
+                <li>Partial and full refund workflows</li>
+                <li>Idempotent request handling</li>
+                <li>Webhook event processing</li>
+                <li>Validation and structured error handling</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h2>Security</h2>
+            <p>Payment and refund endpoints are protected. API requests require this header:</p>
+            <pre>X-API-Key: your_api_key_here</pre>
+        </div>
+
+        <div class="card">
+            <h2>Example request</h2>
+            <pre>POST /api/payment_intents
+Content-Type: application/json
+X-API-Key: your_api_key_here
+
+{
+  "amount": 1000,
+  "currency": "usd",
+  "customerName": "Demo Customer",
+  "customerEmail": "demo@example.com"
+}</pre>
+        </div>
+
+        <div class="card">
+            <h2>Tech stack</h2>
+            <ul>
+                <li>Java 17</li>
+                <li>Spring Boot</li>
+                <li>Stripe API</li>
+                <li>PostgreSQL</li>
+                <li>Docker + Railway</li>
+            </ul>
+        </div>
+    </div>
+
+    <p class="footer">Application is running. Public demo UI is open; production-style API endpoints remain secured.</p>
+</div>
+
+<script>
+    let currentPaymentIntentId = null;
+
+    function setStatus(message, isError) {
+        const status = document.getElementById('status');
+        status.textContent = message;
+        status.className = isError ? 'status-line error' : 'status-line ok';
+    }
+
+    function showResult(data) {
+        document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+    }
+
+    function setBusy(isBusy) {
+        document.getElementById('createBtn').disabled = isBusy;
+        if (!currentPaymentIntentId) {
+            document.getElementById('confirmBtn').disabled = true;
+            document.getElementById('refundBtn').disabled = true;
+        }
+    }
+
+    async function callApi(url, options) {
+        const response = await fetch(url, options);
+        const text = await response.text();
+        let data;
+        try {
+            data = text ? JSON.parse(text) : {};
+        } catch (e) {
+            data = { message: text };
+        }
+        if (!response.ok) {
+            throw data;
+        }
+        return data;
+    }
+
+    async function createPaymentIntent() {
+        setBusy(true);
+        setStatus('Creating payment intent...', false);
+        try {
+            const data = await callApi('/demo/api/payment-intents', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    amount: Number(document.getElementById('amount').value),
+                    currency: document.getElementById('currency').value,
+                    customerName: document.getElementById('customerName').value,
+                    customerEmail: document.getElementById('customerEmail').value,
+                    metadata: { source: 'portfolio-ui' }
+                })
+            });
+            currentPaymentIntentId = data.id;
+            showResult(data);
+            setStatus('Payment intent created. You can now confirm the test payment.', false);
+            document.getElementById('confirmBtn').disabled = false;
+            document.getElementById('refundBtn').disabled = true;
+        } catch (err) {
+            showResult(err);
+            setStatus('Create failed. Check the response below.', true);
+        } finally {
+            document.getElementById('createBtn').disabled = false;
+        }
+    }
+
+    async function confirmPaymentIntent() {
+        if (!currentPaymentIntentId) return;
+        setStatus('Confirming with Stripe test payment method...', false);
+        document.getElementById('confirmBtn').disabled = true;
+        try {
+            const data = await callApi(`/demo/api/payment-intents/${encodeURIComponent(currentPaymentIntentId)}/confirm`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            showResult(data);
+            setStatus('Payment confirmed. You can now test a refund.', false);
+            document.getElementById('refundBtn').disabled = false;
+        } catch (err) {
+            showResult(err);
+            setStatus('Confirm failed. Check the response below.', true);
+            document.getElementById('confirmBtn').disabled = false;
+        }
+    }
+
+    async function refundPaymentIntent() {
+        if (!currentPaymentIntentId) return;
+        setStatus('Creating refund...', false);
+        document.getElementById('refundBtn').disabled = true;
+        try {
+            const data = await callApi('/demo/api/refunds', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    paymentIntentId: currentPaymentIntentId,
+                    reason: 'requested_by_customer'
+                })
+            });
+            showResult(data);
+            setStatus('Refund created successfully.', false);
+        } catch (err) {
+            showResult(err);
+            setStatus('Refund failed. Check the response below.', true);
+            document.getElementById('refundBtn').disabled = false;
+        }
+    }
+</script>
+</body>
+</html>

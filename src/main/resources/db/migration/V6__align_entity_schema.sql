@@ -1,0 +1,12 @@
+ALTER TABLE customers
+ALTER COLUMN email TYPE VARCHAR(120),
+    ALTER COLUMN default_currency TYPE VARCHAR(3);
+
+ALTER TABLE payment_intents
+ALTER COLUMN currency TYPE VARCHAR(3);
+
+ALTER TABLE charges
+ALTER COLUMN currency TYPE VARCHAR(3);
+
+ALTER TABLE refunds
+ALTER COLUMN currency TYPE VARCHAR(3);
